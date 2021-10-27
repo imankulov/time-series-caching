@@ -1,0 +1,7 @@
+dash
+elasticsearch-dsl
+flask-apscheduler
+pydantic
+python-dotenv
+pytz
+redis
