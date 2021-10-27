@@ -5,12 +5,11 @@ import logging
 import os
 import sys
 import typing
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Generic, Optional, Type, TypeVar
 
 import pydantic
-import pytz
 import redis
 from apscheduler.executors.pool import ProcessPoolExecutor
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -115,7 +114,7 @@ class WeeklyBucket(BaseModel):
         """Align weekly bucket start date."""
         seconds_in_week = week.total_seconds()
         return datetime.fromtimestamp(
-            (v.timestamp() // seconds_in_week * seconds_in_week), pytz.utc
+            (v.timestamp() // seconds_in_week * seconds_in_week), timezone.utc
         )
 
     def next(self) -> "WeeklyBucket":
@@ -222,7 +221,7 @@ class GenericFetcher(abc.ABC, Generic[T]):
 
 
 def get_cache_ttl(bucket: WeeklyBucket):
-    if bucket.end >= datetime.now(tz=pytz.utc):
+    if bucket.end >= datetime.now(tz=timezone.utc):
         return int(timedelta(minutes=10).total_seconds())
     return int(timedelta(days=30).total_seconds())
 
@@ -294,7 +293,9 @@ def fetch_transactions(
     result = list(search.scan())
     return [
         Transaction(
-            timestamp=datetime.fromtimestamp(record.timestamp).replace(tzinfo=pytz.utc),
+            timestamp=datetime.fromtimestamp(record.timestamp).replace(
+                tzinfo=timezone.utc
+            ),
             amount=record["value"]["raw"],
             transaction_hash=record["transactionHash"],
         )
@@ -376,7 +377,7 @@ def create_plot(
         raise PreventUpdate()
 
     def to_datetime(value):
-        return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=pytz.utc)
+        return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
     start_date = to_datetime(start_date_str)
     end_date = to_datetime(end_date_str)
@@ -422,11 +423,11 @@ WALLET_ADDRESSES = [
     trigger="interval",
     seconds=1000,
     jitter=100,
-    start_date=datetime.now(tz=pytz.utc) + timedelta(seconds=5),
+    start_date=datetime.now(tz=timezone.utc) + timedelta(seconds=5),
 )
 def warmup_transaction_cache():
-    end_date = datetime.now(pytz.utc)
-    start_date = end_date - timedelta()
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=30)
     for wallet_address in WALLET_ADDRESSES:
         TransactionFetcher(wallet_address).fetch(start_date, end_date)
 
